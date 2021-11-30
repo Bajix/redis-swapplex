@@ -271,3 +271,53 @@ pub fn get_connection() -> ManagedConnection<RedisEnvDB> {
 pub async fn on_connected() -> RedisResult<()> {
   (*CONNECTION_MANAGER).on_connected().await
 }
+
+#[cfg(test)]
+#[ctor::ctor]
+fn setup_test_env() {
+  std::env::set_var("REDIS_URL", "redis://127.0.0.1:6379");
+}
+#[cfg(all(test))]
+mod tests {
+  use redis::AsyncCommands;
+
+  use super::*;
+
+  #[tokio::test]
+  async fn reconnects_on_error() -> RedisResult<()> {
+    let (tx, mut rx) = tokio::sync::oneshot::channel();
+
+    tokio::task::spawn(async move {
+      if let Ok(()) = on_connected().await {
+        tx.send(true).ok();
+      }
+    });
+
+    let mut conn = get_connection();
+
+    let mut pipe = redis::pipe();
+
+    pipe
+      .atomic()
+      .del("test::stream")
+      .xgroup_create_mkstream("test::stream", "rustc", "0");
+
+    let _: (i64, String) = pipe.query_async(&mut conn).await?;
+
+    let result: RedisResult<String> = conn
+      .xgroup_create_mkstream("test::stream", "rustc", "0")
+      .await;
+
+    match result {
+      Err(err) if err.kind().eq(&ErrorKind::ExtensionError) => {
+        assert_eq!(err.code(), Some("BUSYGROUP"));
+      }
+      _ => panic!("Expected BUSYGROUP error"),
+    };
+
+    conn.del("test::stream").await?;
+
+    rx.try_recv().expect("on_connected not called");
+    Ok(())
+  }
+}
