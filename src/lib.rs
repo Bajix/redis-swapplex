@@ -1,13 +1,15 @@
 use arc_swap::ArcSwap;
 use env_url::*;
 use futures_util::future::FutureExt;
-use once_cell::sync::Lazy;
 use redis::{
   aio::{ConnectionLike, MultiplexedConnection},
   Client, Cmd, ErrorKind, Pipeline, RedisError, RedisFuture, RedisResult, Value,
 };
 use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::Notify;
+
+#[cfg(not(feature = "thread-local"))]
+use once_cell::sync::Lazy;
 
 pub trait ConnectionInfo: Send + Sync + 'static + Sized {
   fn new(client: RedisResult<Client>, db_index: i64) -> Self;
@@ -271,20 +273,41 @@ where
   }
 }
 
-static CONNECTION_MANAGER: Lazy<Arc<ConnectionManager<RedisDB<RedisEnvService>>>> = Lazy::new(|| {
-  let connection_info = RedisDB::<RedisEnvService>::default();
+#[cfg(not(feature = "thread-local"))]
+static CONNECTION_MANAGER: Lazy<Arc<ConnectionManager<RedisDB<RedisEnvService>>>> =
+  Lazy::new(|| ConnectionManager::new(RedisDB::<RedisEnvService>::default()));
 
-  ConnectionManager::new(connection_info)
-});
+#[cfg(feature = "thread-local")]
+thread_local! {
+  static CONNECTION_MANAGER: Arc<ConnectionManager<RedisDB<RedisEnvService>>> = {
+    ConnectionManager::new(RedisDB::<RedisEnvService>::default())
+  }
+}
 
 /// Get a managed multiplexed connection for the default env-configured Redis database
+#[cfg(not(feature = "thread-local"))]
 pub fn get_connection() -> ManagedConnection<RedisDB<RedisEnvService>> {
   (*CONNECTION_MANAGER).get_connection()
 }
 
+/// Get a managed multiplexed connection for the default env-configured Redis database
+#[cfg(feature = "thread-local")]
+pub fn get_connection() -> ManagedConnection<RedisDB<RedisEnvService>> {
+  CONNECTION_MANAGER.with(|connection_manager| connection_manager.get_connection())
+}
+
 /// Notify on next connection. Useful for life-cycle based behaviors
+#[cfg(not(feature = "thread-local"))]
 pub async fn on_connected() -> RedisResult<()> {
   (*CONNECTION_MANAGER).on_connected().await
+}
+
+/// Notify on next connection. Useful for life-cycle based behaviors
+#[cfg(feature = "thread-local")]
+pub async fn on_connected() -> RedisResult<()> {
+  let connection_manager =
+    CONNECTION_MANAGER.with(|connection_manager| connection_manager.to_owned());
+  connection_manager.on_connected().await
 }
 
 #[cfg(test)]
