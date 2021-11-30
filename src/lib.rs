@@ -6,7 +6,7 @@ use redis::{
   aio::{ConnectionLike, MultiplexedConnection},
   Client, Cmd, ErrorKind, Pipeline, RedisError, RedisFuture, RedisResult, Value,
 };
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::Notify;
 
 pub trait ConnectionInfo: Send + Sync + 'static + Sized {
@@ -26,48 +26,63 @@ pub trait ConnectionInfo: Send + Sync + 'static + Sized {
   }
 
   fn get_db(&self) -> i64;
-  fn client<'a>(&'a self) -> &'a RedisResult<Client>;
+  fn client(&self) -> &RedisResult<Client>;
 }
 
 #[derive(EnvURL)]
 #[env_url(env_prefix = "REDIS", default = "redis://127.0.0.1:6379")]
-pub struct RedisEnvDB {
+/// Default env-configured Redis database
+pub struct RedisEnvService;
+
+pub struct RedisDB<T: ServiceURL + Send + Sync + 'static + Sized> {
   client: RedisResult<Client>,
   db_index: i64,
+  _marker: PhantomData<fn() -> T>,
 }
 
-impl ConnectionInfo for RedisEnvDB {
+impl<T> ConnectionInfo for RedisDB<T>
+where
+  T: ServiceURL + Send + Sync + 'static + Sized,
+{
   fn new(client: RedisResult<Client>, db_index: i64) -> Self {
-    RedisEnvDB { client, db_index }
+    RedisDB {
+      client,
+      db_index,
+      _marker: PhantomData,
+    }
   }
   fn get_db(&self) -> i64 {
     self.db_index
   }
 
-  fn client<'a>(&'a self) -> &'a RedisResult<Client> {
+  fn client(&self) -> &RedisResult<Client> {
     &self.client
   }
 }
 
-impl Default for RedisEnvDB {
+impl<T> Default for RedisDB<T>
+where
+  T: ServiceURL + Send + Sync + 'static + Sized,
+  Self: ConnectionInfo,
+{
   fn default() -> Self {
-    match RedisEnvDB::service_url() {
-      Ok(url) => RedisEnvDB::from_url(&url),
+    match RedisEnvService::service_url() {
+      Ok(url) => <Self as ConnectionInfo>::from_url(&url),
       Err(_) => {
         let client = Err(RedisError::from((
           ErrorKind::InvalidClientConfig,
           "Invalid Redis connection URL",
         )));
 
-        RedisEnvDB {
+        Self {
           client,
           db_index: 0,
+          _marker: PhantomData,
         }
       }
     }
   }
 }
-
 enum ConnectionState {
   Idle,
   Connecting,
@@ -157,7 +172,7 @@ where
         ConnectionState::Connected(_) => break Ok(state),
       }
 
-      i = i + 1;
+      i += 1;
     }
   }
 
@@ -256,14 +271,14 @@ where
   }
 }
 
-static CONNECTION_MANAGER: Lazy<Arc<ConnectionManager<RedisEnvDB>>> = Lazy::new(|| {
-  let connection_info = RedisEnvDB::default();
+static CONNECTION_MANAGER: Lazy<Arc<ConnectionManager<RedisDB<RedisEnvService>>>> = Lazy::new(|| {
+  let connection_info = RedisDB::<RedisEnvService>::default();
 
   ConnectionManager::new(connection_info)
 });
 
 /// Get a managed multiplexed connection for the default env-configured Redis database
-pub fn get_connection() -> ManagedConnection<RedisEnvDB> {
+pub fn get_connection() -> ManagedConnection<RedisDB<RedisEnvService>> {
   (*CONNECTION_MANAGER).get_connection()
 }
 
