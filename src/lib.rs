@@ -68,7 +68,7 @@ where
   Self: ConnectionInfo,
 {
   fn default() -> Self {
-    match RedisEnvService::service_url() {
+    match <T as ServiceURL>::service_url() {
       Ok(url) => <Self as ConnectionInfo>::from_url(&url),
       Err(_) => {
         let client = Err(RedisError::from((
