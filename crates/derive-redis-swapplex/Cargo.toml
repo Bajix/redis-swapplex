@@ -1,0 +1,18 @@
+[package]
+name = "derive-redis-swapplex"
+authors = ["Thomas Sieverding <Thomas@bajix.com>"]
+edition = "2021"
+version = "0.2.0"
+description = "Derives for redis-swapplex"
+readme = "../../README.md"
+license = "MIT"
+repository = "https://github.com/Bajix/redis-swapplex/"
+
+[lib]
+doctest = false
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "1", features = [] }

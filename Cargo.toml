@@ -1,26 +1,14 @@
-[package]
-name = "redis-swapplex"
-authors = ["Thomas Sieverding <Thomas@bajix.com>"]
-version = "0.1.3"
-edition = "2021"
-description = "Atomic state-transition based Redis multiplexing with reconnection notifications"
-readme = "./README.md"
-license = "MIT"
-repository = "https://github.com/Bajix/redis-swapplex/"
+[profile.dev]
+opt-level = 0
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[profile.release]
+lto = "fat"
+opt-level = 3
+codegen-units = 1
+panic = "abort"
 
-[dependencies]
-arc-swap = "1.5"
-env-url = "2.0.3"
-futures-util = "0.3"
-once_cell = "1.14"
-redis = { version = "0.21", features = ["aio", "tokio-comp"] }
-tokio = { version = "1", features =  ["rt", "macros"] }
-
-[dev-dependencies]
-ctor = "0.1.23"
-
-[features]
-default = []
-thread-local = []
+[workspace]
+members = [
+  "crates/derive-redis-swapplex",
+  "crates/redis-swapplex",
+]
