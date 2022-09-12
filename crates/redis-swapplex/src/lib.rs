@@ -17,7 +17,7 @@ extern crate self as redis_swapplex;
 use arc_swap::{ArcSwap, ArcSwapAny, Cache};
 pub use derive_redis_swapplex::ConnectionManagerContext;
 use env_url::*;
-use futures_util::future::FutureExt;
+use futures_util::{future::FutureExt, stream::unfold, Stream};
 use once_cell::sync::Lazy;
 use redis::{
   aio::{ConnectionLike, MultiplexedConnection},
@@ -113,6 +113,7 @@ where
     }
   }
 }
+
 pub enum ConnectionState {
   Idle,
   Connecting,
@@ -156,24 +157,23 @@ where
   }
 }
 
+#[derive(PartialEq)]
 struct ConnectionAddr(*const MultiplexedConnection);
 
-impl PartialEq<*const MultiplexedConnection> for ConnectionAddr {
-  fn eq(&self, other: &*const MultiplexedConnection) -> bool {
-    self.0 == *other
-  }
-}
-
-impl From<*const MultiplexedConnection> for ConnectionAddr {
-  fn from(ptr: *const MultiplexedConnection) -> Self {
-    ConnectionAddr(ptr)
+impl PartialEq<Option<ConnectionAddr>> for ConnectionAddr {
+  fn eq(&self, other: &Option<ConnectionAddr>) -> bool {
+    if let Some(addr) = other {
+      self.0 == addr.0
+    } else {
+      false
+    }
   }
 }
 
 unsafe impl Send for ConnectionAddr {}
 unsafe impl Sync for ConnectionAddr {}
 
-pub trait ConnectionManagerContext {
+pub trait ConnectionManagerContext: Send + Sync + 'static + Sized {
   type ConnectionInfo: ConnectionInfo;
   fn connection_manager() -> &'static ConnectionManager<Self::ConnectionInfo>;
 
@@ -188,13 +188,14 @@ pub trait ConnectionManagerContext {
 
 impl<T> RedisDB<T>
 where
-  T: ConnectionManagerContext + Send + Sync + 'static + Sized,
+  T: ConnectionManagerContext,
 {
   pub fn get_connection() -> ManagedConnection<T> {
     ManagedConnection::new()
   }
 
-  async fn get_multiplexed_connection() -> RedisResult<(MultiplexedConnection, ConnectionAddr)> {
+  async fn get_multiplexed_connection() -> RedisResult<(MultiplexedConnection, ConnectionAddr, bool)>
+  {
     let connection = T::with_state(|connection_state| match connection_state {
       ConnectionState::Idle => {
         Self::establish_connection(None);
@@ -214,8 +215,8 @@ where
         "Unable to establish Redis connection",
       )))),
       ConnectionState::Connected(connection) => {
-        let conn_addr = addr_of!(connection) as *const MultiplexedConnection;
-        Some(Ok((connection.clone(), conn_addr.into())))
+        let conn_addr = ConnectionAddr(addr_of!(*connection));
+        Some(Ok((connection.clone(), conn_addr, false)))
       }
     });
 
@@ -236,8 +237,8 @@ where
             "Unable to establish Redis connection",
           ))),
           ConnectionState::Connected(connection) => {
-            let conn_addr = addr_of!(connection) as *const MultiplexedConnection;
-            Ok((connection.clone(), conn_addr.into()))
+            let conn_addr = ConnectionAddr(addr_of!(*connection));
+            Ok((connection.clone(), conn_addr, true))
           }
         })
       }
@@ -255,7 +256,7 @@ where
       ConnectionState::ConnectionError(_) => true,
       ConnectionState::Connected(connection) => {
         if let Some(conn_addr) = conn_addr {
-          let current_addr = addr_of!(connection) as *const MultiplexedConnection;
+          let current_addr = ConnectionAddr(addr_of!(*connection));
 
           // Only reconnect if conn_addr hasn't changed
           conn_addr.eq(&current_addr)
@@ -343,16 +344,19 @@ where
 {
   fn req_packed_command<'a>(&'a mut self, cmd: &'a Cmd) -> RedisFuture<'a, Value> {
     (async move {
-      let (mut conn, addr) = <RedisDB<T>>::get_multiplexed_connection().await?;
+      loop {
+        let (mut conn, addr, is_new) = <RedisDB<T>>::get_multiplexed_connection().await?;
 
-      match conn.req_packed_command(cmd).await {
-        Ok(result) => Ok(result),
-        Err(err) => {
-          if err.is_connection_dropped() {
-            <RedisDB<T>>::establish_connection(Some(addr));
+        match conn.req_packed_command(cmd).await {
+          Ok(result) => break Ok(result),
+          Err(err) => {
+            if !is_new && err.is_connection_dropped() {
+              <RedisDB<T>>::establish_connection(Some(addr));
+              continue;
+            }
+
+            break Err(err);
           }
-
-          Err(err)
         }
       }
     })
@@ -366,16 +370,19 @@ where
     count: usize,
   ) -> RedisFuture<'a, Vec<Value>> {
     (async move {
-      let (mut conn, addr) = <RedisDB<T>>::get_multiplexed_connection().await?;
+      loop {
+        let (mut conn, addr, is_new) = <RedisDB<T>>::get_multiplexed_connection().await?;
 
-      match conn.req_packed_commands(cmd, offset, count).await {
-        Ok(result) => Ok(result),
-        Err(err) => {
-          if err.is_connection_dropped() {
-            <RedisDB<T>>::establish_connection(Some(addr));
+        match conn.req_packed_commands(cmd, offset, count).await {
+          Ok(result) => break Ok(result),
+          Err(err) => {
+            if !is_new && err.is_connection_dropped() {
+              <RedisDB<T>>::establish_connection(Some(addr));
+              continue;
+            }
+
+            break Err(err);
           }
-
-          Err(err)
         }
       }
     })
@@ -392,12 +399,45 @@ pub fn get_connection() -> ManagedConnection<EnvConnection> {
   <RedisDB<EnvConnection>>::get_connection()
 }
 
-/// Notify on next connection. Useful for connection lifecycle behaviors
+/// Notify the next time a connection is established
 pub async fn on_connected<T>() -> RedisResult<()>
 where
   T: ConnectionManagerContext,
 {
   <RedisDB<T>>::on_connected().await
+}
+
+fn connection_addr<T>() -> Option<ConnectionAddr>
+where
+  T: ConnectionManagerContext,
+{
+  T::with_state(|connect_state| {
+    if let ConnectionState::Connected(connection) = connect_state {
+      let conn_addr = ConnectionAddr(addr_of!(*connection));
+
+      Some(conn_addr)
+    } else {
+      None
+    }
+  })
+}
+
+/// A stream to notify when connected; useful for client tracking redirection
+pub fn connection_stream<T>() -> impl Stream<Item = ()>
+where
+  T: ConnectionManagerContext,
+{
+  unfold(None, |conn_addr| async move {
+    loop {
+      if let Some(current_addr) = connection_addr::<T>() {
+        if current_addr.ne(&conn_addr) {
+          break Some(((), Some(current_addr)));
+        }
+      }
+
+      T::connection_manager().notify.notified().await
+    }
+  })
 }
 
 #[cfg(test)]
@@ -407,19 +447,16 @@ fn setup_test_env() {
 }
 #[cfg(all(test))]
 mod tests {
+  use futures_util::StreamExt;
   use redis::AsyncCommands;
 
   use super::*;
 
   #[tokio::test]
   async fn reconnects_on_error() -> RedisResult<()> {
-    let (tx, mut rx) = tokio::sync::oneshot::channel();
+    let conn_stream = connection_stream::<EnvConnection>();
 
-    tokio::task::spawn(async move {
-      if let Ok(()) = on_connected::<EnvConnection>().await {
-        tx.send(true).ok();
-      }
-    });
+    tokio::pin!(conn_stream);
 
     let mut conn = get_connection();
 
@@ -432,6 +469,10 @@ mod tests {
 
     let _: (i64, String) = pipe.query_async(&mut conn).await?;
 
+    conn_stream.next().await;
+
+    let _: () = redis::cmd("QUIT").query_async(&mut conn).await?;
+
     let result: RedisResult<String> = conn
       .xgroup_create_mkstream("test::stream", "rustc", "0")
       .await;
@@ -443,9 +484,10 @@ mod tests {
       _ => panic!("Expected BUSYGROUP error"),
     };
 
+    conn_stream.next().await;
+
     conn.del("test::stream").await?;
 
-    rx.try_recv().expect("on_connected not called");
     Ok(())
   }
 }

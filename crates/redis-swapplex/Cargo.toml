@@ -1,7 +1,7 @@
 [package]
 name = "redis-swapplex"
 authors = ["Thomas Sieverding <Thomas@bajix.com>"]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Atomic state-transition based Redis multiplexing with reconnection notifications"
 readme = "../../README.md"
@@ -12,12 +12,12 @@ repository = "https://github.com/Bajix/redis-swapplex/"
 
 [dependencies]
 arc-swap = "1.5"
+derive-redis-swapplex = { version  = "0.2.0", path = "../derive-redis-swapplex"}
 env-url = "2.0.3"
 futures-util = "0.3"
 once_cell = "1.14"
 redis = { version = "0.21", features = ["aio", "tokio-comp"] }
 tokio = { version = "1", features =  ["sync", "parking_lot"] }
-derive-redis-swapplex = { version  = "0.2.0", path = "../derive-redis-swapplex"}
 
 [dev-dependencies]
 tokio = { version = "1", features =  ["rt", "macros"] }
