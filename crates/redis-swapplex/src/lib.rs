@@ -393,8 +393,11 @@ pub fn get_connection() -> ManagedConnection<EnvConnection> {
 }
 
 /// Notify on next connection. Useful for connection lifecycle behaviors
-pub async fn on_connected() -> RedisResult<()> {
-  <RedisDB<EnvConnection>>::on_connected().await
+pub async fn on_connected<T>() -> RedisResult<()>
+where
+  T: ConnectionManagerContext,
+{
+  <RedisDB<T>>::on_connected().await
 }
 
 #[cfg(test)]
@@ -413,7 +416,7 @@ mod tests {
     let (tx, mut rx) = tokio::sync::oneshot::channel();
 
     tokio::task::spawn(async move {
-      if let Ok(()) = on_connected().await {
+      if let Ok(()) = on_connected::<EnvConnection>().await {
         tx.send(true).ok();
       }
     });
