@@ -29,6 +29,7 @@ use std::{
 };
 use tokio::sync::Notify;
 
+/// Trait for defining redis client creation and db selection
 pub trait ConnectionInfo: Send + Sync + Sized {
   fn new(client: RedisResult<Client>, db_index: i64) -> Self;
   fn parse_index(url: &Url) -> Option<i64> {
@@ -51,9 +52,10 @@ pub trait ConnectionInfo: Send + Sync + Sized {
 
 #[derive(EnvURL, ConnectionManagerContext)]
 #[env_url(env_prefix = "REDIS", default = "redis://127.0.0.1:6379")]
-/// Default env-configured Redis connection
+/// Default env-configured Redis connection manager
 pub struct EnvConnection;
 
+#[doc(hidden)]
 pub struct RedisDB<T: Send + Sync + Sized> {
   client: RedisResult<Client>,
   db_index: i64,
@@ -114,6 +116,7 @@ where
   }
 }
 
+#[doc(hidden)]
 pub enum ConnectionState {
   Idle,
   Connecting,
@@ -122,6 +125,7 @@ pub enum ConnectionState {
   Connected(MultiplexedConnection),
 }
 
+#[doc(hidden)]
 pub struct ConnectionManager<T: ConnectionInfo> {
   state: Lazy<ArcSwap<ConnectionState>>,
   notify: Notify,
@@ -315,6 +319,7 @@ where
   }
 }
 
+/// A multiplexed connection utilizing the respective connection manager
 pub struct ManagedConnection<T: ConnectionManagerContext> {
   _marker: PhantomData<T>,
 }
@@ -423,7 +428,7 @@ where
   })
 }
 
-/// A stream to notify when connected; useful for client tracking redirection
+/// A stream notifying whenever the current or a new connection is connected; useful for client tracking redirection
 pub fn connection_stream<T>() -> impl Stream<Item = ()>
 where
   T: ConnectionManagerContext,
