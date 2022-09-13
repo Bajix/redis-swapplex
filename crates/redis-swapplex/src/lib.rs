@@ -24,8 +24,14 @@ use redis::{
   Client, Cmd, ErrorKind, Pipeline, RedisError, RedisFuture, RedisResult, Value,
 };
 use std::{
-  cell::RefCell, marker::PhantomData, ops::Deref, ptr::addr_of, sync::Arc, task::Poll,
+  cell::RefCell,
+  marker::PhantomData,
+  ops::Deref,
+  ptr::addr_of,
+  sync::Arc,
+  task::Poll,
   thread::LocalKey,
+  time::{Duration, SystemTime},
 };
 use tokio::sync::Notify;
 
@@ -121,7 +127,7 @@ pub enum ConnectionState {
   Idle,
   Connecting,
   ClientError(ErrorKind),
-  ConnectionError(ErrorKind),
+  ConnectionError(ErrorKind, SystemTime),
   Connected(MultiplexedConnection),
 }
 
@@ -211,11 +217,18 @@ where
         kind.to_owned(),
         "Invalid Redis connection URL",
       )))),
-      ConnectionState::ConnectionError(ErrorKind::IoError) => {
+      ConnectionState::ConnectionError(
+        ErrorKind::IoError | ErrorKind::ClusterDown | ErrorKind::BusyLoadingError,
+        time,
+      ) if SystemTime::now()
+        .duration_since(*time)
+        .unwrap()
+        .gt(&Duration::from_millis(1500)) =>
+      {
         Self::establish_connection(None);
         None
       }
-      ConnectionState::ConnectionError(kind) => Some(Err(RedisError::from((
+      ConnectionState::ConnectionError(kind, _) => Some(Err(RedisError::from((
         kind.to_owned(),
         "Unable to establish Redis connection",
       )))),
@@ -237,7 +250,7 @@ where
             kind.to_owned(),
             "Invalid Redis connection URL",
           ))),
-          ConnectionState::ConnectionError(kind) => Err(RedisError::from((
+          ConnectionState::ConnectionError(kind, _timestamp) => Err(RedisError::from((
             kind.to_owned(),
             "Unable to establish Redis connection",
           ))),
@@ -258,7 +271,19 @@ where
       ConnectionState::Connecting => false,
       // Never reconnect if there's been a client error; treat as poisoned
       ConnectionState::ClientError(_) => false,
-      ConnectionState::ConnectionError(_) => true,
+      ConnectionState::ConnectionError(
+        ErrorKind::AuthenticationFailed | ErrorKind::InvalidClientConfig,
+        _,
+      ) => false,
+      ConnectionState::ConnectionError(_, time)
+        if SystemTime::now()
+          .duration_since(*time)
+          .unwrap()
+          .gt(&Duration::from_millis(1500)) =>
+      {
+        true
+      }
+      ConnectionState::ConnectionError(_, _) => false,
       ConnectionState::Connected(connection) => {
         if let Some(conn_addr) = conn_addr {
           let current_addr = ConnectionAddr(addr_of!(*connection));
@@ -283,8 +308,9 @@ where
               Ok(conn) => {
                 T::connection_manager().store_and_notify(ConnectionState::Connected(conn));
               }
-              Err(err) => T::connection_manager()
-                .store_and_notify(ConnectionState::ConnectionError(err.kind())),
+              Err(err) => T::connection_manager().store_and_notify(
+                ConnectionState::ConnectionError(err.kind(), SystemTime::now()),
+              ),
             },
             Err(err) => {
               T::connection_manager().store_and_notify(ConnectionState::ClientError(err.kind()))
@@ -304,9 +330,14 @@ where
           kind.to_owned(),
           "Invalid Redis connection URL",
         )))),
-        ConnectionState::ConnectionError(kind) if kind.ne(&ErrorKind::IoError) => Poll::Ready(Err(
-          RedisError::from((kind.to_owned(), "Unable to establish Redis connection")),
-        )),
+        ConnectionState::ConnectionError(
+          ErrorKind::BusyLoadingError | ErrorKind::ClusterDown | ErrorKind::IoError,
+          _,
+        ) => Poll::Pending,
+        ConnectionState::ConnectionError(kind, _) => Poll::Ready(Err(RedisError::from((
+          kind.to_owned(),
+          "Unable to establish Redis connection",
+        )))),
         ConnectionState::Connected(_) => Poll::Ready(Ok(())),
         _ => Poll::Pending,
       });
