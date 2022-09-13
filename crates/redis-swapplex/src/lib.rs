@@ -29,7 +29,7 @@ use std::{
 };
 use tokio::sync::Notify;
 
-pub trait ConnectionInfo: Send + Sync + 'static + Sized {
+pub trait ConnectionInfo: Send + Sync + Sized {
   fn new(client: RedisResult<Client>, db_index: i64) -> Self;
   fn parse_index(url: &Url) -> Option<i64> {
     let mut segments = url.path_segments()?;
@@ -54,7 +54,7 @@ pub trait ConnectionInfo: Send + Sync + 'static + Sized {
 /// Default env-configured Redis connection
 pub struct EnvConnection;
 
-pub struct RedisDB<T: Send + Sync + 'static + Sized> {
+pub struct RedisDB<T: Send + Sync + Sized> {
   client: RedisResult<Client>,
   db_index: i64,
   _marker: PhantomData<fn() -> T>,
@@ -340,7 +340,7 @@ where
 
 impl<T> ConnectionLike for ManagedConnection<T>
 where
-  T: ConnectionManagerContext + Send + Sync + 'static + Sized,
+  T: ConnectionManagerContext,
 {
   fn req_packed_command<'a>(&'a mut self, cmd: &'a Cmd) -> RedisFuture<'a, Value> {
     (async move {
