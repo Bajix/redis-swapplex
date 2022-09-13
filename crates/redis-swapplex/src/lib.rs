@@ -175,6 +175,11 @@ unsafe impl Sync for ConnectionAddr {}
 
 pub trait ConnectionManagerContext: Send + Sync + 'static + Sized {
   type ConnectionInfo: ConnectionInfo;
+
+  fn get_connection() -> ManagedConnection<Self> {
+    ManagedConnection::new()
+  }
+
   fn connection_manager() -> &'static ConnectionManager<Self::ConnectionInfo>;
 
   fn state_cache(
@@ -190,10 +195,6 @@ impl<T> RedisDB<T>
 where
   T: ConnectionManagerContext,
 {
-  pub fn get_connection() -> ManagedConnection<T> {
-    ManagedConnection::new()
-  }
-
   async fn get_multiplexed_connection() -> RedisResult<(MultiplexedConnection, ConnectionAddr, bool)>
   {
     let connection = T::with_state(|connection_state| match connection_state {
@@ -396,7 +397,7 @@ where
 
 /// Get a managed multiplexed connection for the default env-configured Redis database
 pub fn get_connection() -> ManagedConnection<EnvConnection> {
-  <RedisDB<EnvConnection>>::get_connection()
+  EnvConnection::get_connection()
 }
 
 /// Notify the next time a connection is established
