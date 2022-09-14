@@ -1,7 +1,7 @@
 [package]
 name = "redis-swapplex"
 authors = ["Thomas Sieverding <Thomas@bajix.com>"]
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 description = "Atomic state-transition based Redis multiplexing with reconnection notifications"
 readme = "../../README.md"
@@ -20,5 +20,5 @@ redis = { version = "0.21", features = ["aio", "tokio-comp"] }
 tokio = { version = "1", features =  ["sync", "parking_lot"] }
 
 [dev-dependencies]
-tokio = { version = "1", features =  ["rt", "macros"] }
+tokio = { version = "1", features =  ["rt", "macros", "time"] }
 ctor = "0.1.23"

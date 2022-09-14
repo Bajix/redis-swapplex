@@ -205,8 +205,7 @@ impl<T> RedisDB<T>
 where
   T: ConnectionManagerContext,
 {
-  async fn get_multiplexed_connection() -> RedisResult<(MultiplexedConnection, ConnectionAddr, bool)>
-  {
+  async fn get_multiplexed_connection() -> RedisResult<(MultiplexedConnection, ConnectionAddr)> {
     let connection = T::with_state(|connection_state| match connection_state {
       ConnectionState::Idle => {
         Self::establish_connection(None);
@@ -234,7 +233,7 @@ where
       )))),
       ConnectionState::Connected(connection) => {
         let conn_addr = ConnectionAddr(addr_of!(*connection));
-        Some(Ok((connection.clone(), conn_addr, false)))
+        Some(Ok((connection.clone(), conn_addr)))
       }
     });
 
@@ -256,7 +255,7 @@ where
           ))),
           ConnectionState::Connected(connection) => {
             let conn_addr = ConnectionAddr(addr_of!(*connection));
-            Ok((connection.clone(), conn_addr, true))
+            Ok((connection.clone(), conn_addr))
           }
         })
       }
@@ -382,12 +381,12 @@ where
   fn req_packed_command<'a>(&'a mut self, cmd: &'a Cmd) -> RedisFuture<'a, Value> {
     (async move {
       loop {
-        let (mut conn, addr, is_new) = <RedisDB<T>>::get_multiplexed_connection().await?;
+        let (mut conn, addr) = <RedisDB<T>>::get_multiplexed_connection().await?;
 
         match conn.req_packed_command(cmd).await {
           Ok(result) => break Ok(result),
           Err(err) => {
-            if !is_new && err.is_connection_dropped() {
+            if err.is_connection_dropped() {
               <RedisDB<T>>::establish_connection(Some(addr));
               continue;
             }
@@ -408,12 +407,12 @@ where
   ) -> RedisFuture<'a, Vec<Value>> {
     (async move {
       loop {
-        let (mut conn, addr, is_new) = <RedisDB<T>>::get_multiplexed_connection().await?;
+        let (mut conn, addr) = <RedisDB<T>>::get_multiplexed_connection().await?;
 
         match conn.req_packed_commands(cmd, offset, count).await {
           Ok(result) => break Ok(result),
           Err(err) => {
-            if !is_new && err.is_connection_dropped() {
+            if err.is_connection_dropped() {
               <RedisDB<T>>::establish_connection(Some(addr));
               continue;
             }
@@ -484,6 +483,8 @@ fn setup_test_env() {
 }
 #[cfg(all(test))]
 mod tests {
+  use std::collections::HashSet;
+
   use futures_util::StreamExt;
   use redis::AsyncCommands;
 
@@ -524,6 +525,63 @@ mod tests {
     conn_stream.next().await;
 
     conn.del("test::stream").await?;
+
+    Ok(())
+  }
+
+  #[tokio::test]
+  async fn reconnects_immediately() -> RedisResult<()> {
+    let mut conn = get_connection();
+
+    let mut client_list: HashSet<i32> = HashSet::new();
+
+    for _ in 0..10 {
+      let (client_id, _): (i32, String) = redis::pipe()
+        .cmd("CLIENT")
+        .arg("ID")
+        .cmd("QUIT")
+        .query_async(&mut conn)
+        .await?;
+
+      client_list.insert(client_id);
+    }
+
+    assert_eq!(client_list.len(), 10);
+
+    Ok(())
+  }
+
+  #[ignore = "use `cargo test -- --ignored` to test in isolation"]
+  #[tokio::test]
+  async fn handles_shutdown() -> RedisResult<()> {
+    let mut conn = get_connection();
+
+    match redis::cmd("SHUTDOWN").query_async(&mut conn).await {
+      Ok(()) => panic!("Redis shutdown should result in IoError"),
+      Err(err) if err.kind().eq(&ErrorKind::IoError) => Ok(()),
+      Err(err) => Err(err),
+    }?;
+
+    match redis::cmd("CLIENT").arg("ID").query_async(&mut conn).await {
+      Ok(()) => panic!("Redis server should still be offline"),
+      Err(err) if err.kind().eq(&ErrorKind::IoError) => Ok(()),
+      Err(err) => Err(err),
+    }?;
+
+    tokio::time::sleep(Duration::from_millis(1400)).await;
+
+    match redis::cmd("CLIENT").arg("ID").query_async(&mut conn).await {
+      Ok(()) => panic!("Redis server should be online, but we shouldn't be able to reconnect yet"),
+      Err(err) if err.kind().eq(&ErrorKind::IoError) => Ok(()),
+      Err(err) => Err(err),
+    }?;
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    redis::cmd("CLIENT")
+      .arg("ID")
+      .query_async(&mut conn)
+      .await?;
 
     Ok(())
   }
