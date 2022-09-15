@@ -154,6 +154,14 @@ where
     self.state.store(state.into());
     self.notify.notify_waiters();
   }
+
+  pub fn client(&self) -> &RedisResult<Client> {
+    self.connection_info.client()
+  }
+
+  pub fn get_db(&self) -> i64 {
+    self.connection_info.get_db()
+  }
 }
 
 impl<T> Deref for ConnectionManager<T>
@@ -191,6 +199,14 @@ pub trait ConnectionManagerContext: Send + Sync + 'static + Sized {
   }
 
   fn connection_manager() -> &'static ConnectionManager<Self::ConnectionInfo>;
+
+  fn client() -> &'static RedisResult<Client> {
+    Self::connection_manager().client()
+  }
+
+  fn get_db() -> i64 {
+    Self::connection_manager().get_db()
+  }
 
   fn state_cache(
   ) -> &'static LocalKey<RefCell<Cache<&'static ArcSwap<ConnectionState>, Arc<ConnectionState>>>>;
@@ -302,7 +318,7 @@ where
 
       if Arc::ptr_eq(&prev, &state) {
         tokio::task::spawn(async move {
-          match T::connection_manager().connection_info.client() {
+          match T::client() {
             Ok(client) => match client.get_multiplexed_tokio_connection().await {
               Ok(conn) => {
                 T::connection_manager().store_and_notify(ConnectionState::Connected(conn));
@@ -426,7 +442,7 @@ where
   }
 
   fn get_db(&self) -> i64 {
-    T::connection_manager().connection_info.get_db()
+    T::get_db()
   }
 }
 
