@@ -7,6 +7,11 @@ opt-level = 3
 codegen-units = 1
 panic = "abort"
 
+[profile.bench]
+lto = "fat"
+opt-level = 3
+codegen-units = 1
+
 [workspace]
 members = [
   "crates/derive-redis-swapplex",

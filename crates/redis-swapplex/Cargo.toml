@@ -20,5 +20,13 @@ redis = { version = "0.21", features = ["aio", "tokio-comp"] }
 tokio = { version = "1", features =  ["sync", "parking_lot"] }
 
 [dev-dependencies]
-tokio = { version = "1", features =  ["rt", "macros", "time"] }
+criterion = { version = "0.4.0", features = ["async_tokio", "html_reports"] }
 ctor = "0.1.23"
+redis = { version = "0.21", features = ["connection-manager"]}
+tokio = { version = "1", features =  ["rt", "macros", "time", "rt-multi-thread"] }
+
+[[bench]]
+name = "benchmarks"
+path = "../../benches/bench.rs"
+harness = false
+doc = false
