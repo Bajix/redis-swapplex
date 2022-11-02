@@ -15,13 +15,13 @@ arc-swap = "1.5"
 derive-redis-swapplex = { version  = "0.4.0", path = "../derive-redis-swapplex"}
 env-url = "2.0.3"
 futures-util = "0.3"
-once_cell = "1.14"
+once_cell = "1.16.0"
 redis = { version = "0.22", features = ["aio", "tokio-comp"] }
 tokio = { version = "1", features =  ["sync", "parking_lot"] }
 
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["async_tokio", "html_reports"] }
-ctor = "0.1.23"
+ctor = "0.1.26"
 redis = { version = "0.22", features = ["connection-manager"]}
 tokio = { version = "1", features =  ["rt", "macros", "time", "rt-multi-thread"] }
 
