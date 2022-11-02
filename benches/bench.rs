@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use fred::prelude::*;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use redis_swapplex::{ConnectionManagerContext, EnvConnection};
 use std::time::Duration;
@@ -29,10 +30,7 @@ fn bench_redis(c: &mut Criterion) {
       .expect("Unable to establish Redis connection");
   });
 
-  c.benchmark_group("Multiplexed Redis GET")
-    .warm_up_time(Duration::from_millis(200))
-    .measurement_time(Duration::from_secs(2))
-    .sample_size(100);
+  c.benchmark_group("Multiplexed Redis GET");
 
   c.bench_function("redis::aio::ConnectionManager", |b| {
     b.to_async(&rt).iter(|| async {
@@ -46,6 +44,29 @@ fn bench_redis(c: &mut Criterion) {
       let mut conn = EnvConnection::get_connection();
       let _: () = conn.get("test").await.unwrap();
     })
+  });
+
+  c.benchmark_group("Redis GET");
+
+  let client = rt.block_on(async {
+    let config = RedisConfig::default();
+    let policy = ReconnectPolicy::default();
+    let client = RedisClient::new(config);
+
+    // connect to the server, returning a handle to the task that drives the connection
+    let _ = client.connect(Some(policy));
+    let _ = client
+      .wait_for_connect()
+      .await
+      .expect("Unable to establish Redis connection");
+
+    client
+  });
+
+  c.bench_function("fred::clients::redis::RedisClient", |b| {
+    b.to_async(&rt).iter(|| async {
+      let _: () = client.get("test").await.unwrap();
+    });
   });
 }
 
