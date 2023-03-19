@@ -1,7 +1,7 @@
 [package]
 name = "redis-swapplex"
 authors = ["Thomas Sieverding <Thomas@bajix.com>"]
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "Atomic state-transition based Redis multiplexing with reconnection notifications"
 readme = "../../README.md"
@@ -12,7 +12,7 @@ repository = "https://github.com/Bajix/redis-swapplex/"
 
 [dependencies]
 arc-swap = "1.6.0"
-derive-redis-swapplex = { version  = "0.4.0", path = "../derive-redis-swapplex"}
+derive-redis-swapplex = { version  = "0.4.1", path = "../derive-redis-swapplex"}
 env-url = "2.0.3"
 futures-util = "0.3"
 once_cell = "1.17"
