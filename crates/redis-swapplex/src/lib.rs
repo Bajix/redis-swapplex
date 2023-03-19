@@ -514,13 +514,13 @@ where
 }
 
 /// Get the value of a key using auto-batched MGET commands
-pub async fn get<K: Into<Vec<u8>>>(key: K) -> Result<Option<Vec<u8>>, Arc<RedisError>> {
+pub async fn get<K: Into<Vec<u8>>>(key: K) -> Result<Option<Vec<u8>>, ErrorKind> {
   struct MGetQueue;
 
   #[local_queue(buffer_size = 1024)]
   impl TaskQueue for MGetQueue {
     type Task = Vec<u8>;
-    type Value = Result<Option<Vec<u8>>, Arc<RedisError>>;
+    type Value = Result<Option<Vec<u8>>, ErrorKind>;
 
     async fn batch_process<const N: usize>(
       batch: PendingAssignment<'async_trait, Self, N>,
@@ -535,7 +535,7 @@ pub async fn get<K: Into<Vec<u8>>>(key: K) -> Result<Option<Vec<u8>>, Arc<RedisE
 
       match data {
         Ok(data) => assignment.resolve_with_iter(data.into_iter().map(Result::Ok)),
-        Err(err) => assignment.resolve_with_iter(iter::repeat(Result::Err(Arc::new(err)))),
+        Err(err) => assignment.resolve_with_iter(iter::repeat(Result::Err(err.kind()))),
       }
     }
   }
