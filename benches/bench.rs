@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use fred::prelude::*;
 use redis::{aio::ConnectionManager, AsyncCommands};
-use redis_swapplex::{ConnectionManagerContext, EnvConnection};
+use redis_swapplex::{get, ConnectionManagerContext, EnvConnection};
 use tokio::runtime::Builder;
 
 fn bench_redis(c: &mut Criterion) {
@@ -43,6 +43,12 @@ fn bench_redis(c: &mut Criterion) {
       let mut conn = EnvConnection::get_connection();
       let _: () = conn.get("test").await.unwrap();
     })
+  });
+
+  c.bench_function("redis_swapplex::get", |b| {
+    b.to_async(&rt).iter(|| async {
+      get("test").await.unwrap();
+    });
   });
 
   c.benchmark_group("Redis GET");

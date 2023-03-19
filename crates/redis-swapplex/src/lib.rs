@@ -1,10 +1,11 @@
-//! Atomic state-transition based Redis multiplexing with reconnection notifications. Connection configuration is provided by [env-url](https://crates.io/crates/env-url).
+//! Redis multiplexing with reconnection notifications and MGET auto-batching. Connection configuration is provided by [env-url](https://crates.io/crates/env-url).
 //!
 //! Why use this instead of [redis::aio::ConnectionManager](https://docs.rs/redis/latest/redis/aio/struct.ConnectionManager.html)?
 //! - Error-free reconnection behavior: when a command would otherwise fail as a consequence of the connection being dropped, this library will immediately reconnect and retry when able without producing an otherwise avoidable IoError and with subsequent reconnections debounced 1500ms
 //! - Less contention overhead: the usage of [arc_swap::cache::Cache](https://docs.rs/arc-swap/latest/arc_swap/cache/struct.Cache.html) results in a 10-25x speed up of cached connection acquisition.
 //! - ENV configuration makes life easier and simplifies kubernetes usage
 //! - Reconnects can be observed, thus allowing for Redis [server-assisted client-side caching](https://redis.io/docs/manual/client-side-caching/) using client tracking redirection
+//! - Integrated MGET auto-batching (up to 180x more performant than GET)
 //!
 //! ```text
 //! REDIS_URL=redis://127.0.0.1:6379
@@ -23,6 +24,7 @@
 //! }
 //! ```
 
+#![cfg_attr(not(feature = "boxed"), feature(type_alias_impl_trait))]
 #![allow(rustdoc::private_intra_doc_links)]
 #[doc(hidden)]
 pub extern crate arc_swap;
@@ -37,8 +39,13 @@ use redis::{
   aio::{ConnectionLike, MultiplexedConnection},
   Client, Cmd, ErrorKind, Pipeline, RedisError, RedisFuture, RedisResult, Value,
 };
+use stack_queue::{
+  assignment::{CompletionReceipt, PendingAssignment, UnboundedSlice},
+  local_queue, BackgroundQueue, TaskQueue,
+};
 use std::{
   cell::RefCell,
+  iter,
   marker::PhantomData,
   ops::Deref,
   ptr::addr_of,
@@ -504,6 +511,66 @@ where
       T::connection_manager().notify.notified().await
     }
   })
+}
+
+/// Get the value of a key using auto-batched MGET commands
+pub async fn get<K: Into<Vec<u8>>>(key: K) -> Result<Option<Vec<u8>>, Arc<RedisError>> {
+  struct MGetQueue;
+
+  #[local_queue(buffer_size = 1024)]
+  impl TaskQueue for MGetQueue {
+    type Task = Vec<u8>;
+    type Value = Result<Option<Vec<u8>>, Arc<RedisError>>;
+
+    async fn batch_process<const N: usize>(
+      batch: PendingAssignment<'async_trait, Self, N>,
+    ) -> CompletionReceipt<Self> {
+      let mut conn = get_connection();
+      let assignment = batch.into_assignment();
+
+      let data: Result<Vec<Option<Vec<u8>>>, RedisError> = redis::cmd("MGET")
+        .arg(assignment.tasks())
+        .query_async(&mut conn)
+        .await;
+
+      match data {
+        Ok(data) => assignment.resolve_with_iter(data.into_iter().map(Result::Ok)),
+        Err(err) => assignment.resolve_with_iter(iter::repeat(Result::Err(Arc::new(err)))),
+      }
+    }
+  }
+
+  MGetQueue::auto_batch(key.into()).await
+}
+
+/// Set the value of a key using auto-batched MSET commands. This runs in the background with Redis errors ignored.
+///
+/// # Panics
+///
+/// Panics if called from **outside** of the Tokio runtime.
+///
+pub fn set<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(key: K, value: V) {
+  struct MSetQueue;
+
+  #[local_queue(buffer_size = 2048)]
+  impl BackgroundQueue for MSetQueue {
+    type Task = [Vec<u8>; 2];
+
+    async fn batch_process<const N: usize>(batch: UnboundedSlice<'async_trait, [Vec<u8>; 2], N>) {
+      let mut conn = get_connection();
+      let assignment = batch.into_bounded();
+
+      let mut cmd = redis::cmd("MSET");
+
+      for kv in assignment.into_iter() {
+        cmd.arg(&kv);
+      }
+
+      let _: Result<(), RedisError> = cmd.query_async(&mut conn).await;
+    }
+  }
+
+  MSetQueue::auto_batch([key.into(), value.into()]);
 }
 
 #[cfg(test)]
