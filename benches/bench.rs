@@ -2,7 +2,6 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use fred::prelude::*;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use redis_swapplex::{ConnectionManagerContext, EnvConnection};
-use std::time::Duration;
 use tokio::runtime::Builder;
 
 fn bench_redis(c: &mut Criterion) {
