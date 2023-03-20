@@ -2,10 +2,11 @@
 //!
 //! Why use this instead of [redis::aio::ConnectionManager](https://docs.rs/redis/latest/redis/aio/struct.ConnectionManager.html)?
 //! - Error-free reconnection behavior: when a command would otherwise fail as a consequence of the connection being dropped, this library will immediately reconnect and retry when able without producing an otherwise avoidable IoError and with subsequent reconnections debounced 1500ms
-//! - Less contention overhead: the usage of [arc_swap::cache::Cache](https://docs.rs/arc-swap/latest/arc_swap/cache/struct.Cache.html) results in a 10-25x speed up of cached connection acquisition.
-//! - ENV configuration makes life easier and simplifies kubernetes usage
-//! - Reconnects can be observed, thus allowing for Redis [server-assisted client-side caching](https://redis.io/docs/manual/client-side-caching/) using client tracking redirection
+//! - ENV configuration simplifies kubernetes usage
+//! - Reconnects can be observed allowing for Redis [server-assisted client-side caching](https://redis.io/docs/manual/client-side-caching/) using client tracking redirection
 //! - Integrated MGET auto-batching (up to 180x more performant than GET)
+//!
+//! Composible connection urls are provided by environment variables using [env-url](https://crates.io/crates/env-url) with the `REDIS` prefix:
 //!
 //! ```text
 //! REDIS_URL=redis://127.0.0.1:6379
