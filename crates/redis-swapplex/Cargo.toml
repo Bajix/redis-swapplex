@@ -1,7 +1,7 @@
 [package]
 name = "redis-swapplex"
 authors = ["Thomas Sieverding <Thomas@bajix.com>"]
-version = "0.5.1"
+version = "0.6.0"
 edition = "2021"
 description = "Redis multiplexing with reconnection notifications and MGET auto-batching"
 readme = "../../README.md"
@@ -12,32 +12,26 @@ repository = "https://github.com/Bajix/redis-swapplex/"
 
 [dependencies]
 arc-swap = "1.6.0"
-derive-redis-swapplex = { version  = "0.5.0", path = "../derive-redis-swapplex"}
+derive-redis-swapplex = { version = "0.6.0", path = "../derive-redis-swapplex" }
 env-url = "2.0.3"
 futures-util = "0.3"
 once_cell = "1.17"
 redis = { version = "0.22", features = ["aio", "tokio-comp"] }
-stack-queue = { version = "0.3.4", default-features = false, features = ["redis-args"] }
-tokio = { version = "1", features =  ["sync", "parking_lot"] }
+stack-queue = { version = "0.4", features = ["redis-args"] }
+tokio = { version = "1", features = ["sync", "parking_lot"] }
 
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["async_tokio", "html_reports"] }
 ctor = "0.1.26"
-redis = { version = "0.22", features = ["connection-manager"]}
-tokio = { version = "1", features =  ["rt", "macros", "time", "rt-multi-thread"] }
+redis = { version = "0.22", features = ["connection-manager"] }
+tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread"] }
 fred = "5.2.0"
 
 [features]
-default = ["leaky-context"]
+default = []
 
 # Downgrade async_t to async_trait::async_trait
 boxed = ["stack-queue/boxed"]
-
-# Tokio Runtime configured with a barrier-synchronized shutdown as to ensure tasks never outlive worker thread owned local data
-barrier-protected-runtime = ["stack-queue/barrier-protected-runtime"]
-
-# Compatibilty flag that makes Context<T> substitute Box::leak instead of relying the internal barrier-protected Runtime to ensure tasks never outlive runtime worker owned thread local data by rendezvousing during shutdown
-leaky-context = ["stack-queue/leaky-context"]
 
 [[bench]]
 name = "benchmarks"

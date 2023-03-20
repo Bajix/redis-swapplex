@@ -4,7 +4,7 @@
 [![Cargo](https://img.shields.io/crates/v/redis-swapplex.svg)](https://crates.io/crates/redis-swapplex)
 [![Documentation](https://docs.rs/redis-swapplex/badge.svg)](https://docs.rs/redis-swapplex)
 
-Redis multiplexing with reconnection notifications and MGET auto-batching. Connection configuration is provided by [env-url](https://crates.io/crates/env-url).
+Redis multiplexing with reconnection notifications and MGET auto-batching
 
 Why use this instead of [redis::aio::ConnectionManager](https://docs.rs/redis/latest/redis/aio/struct.ConnectionManager.html)?
 - Error-free reconnection behavior: when a command would otherwise fail as a consequence of the connection being dropped, this library will immediately reconnect and retry when able without producing an otherwise avoidable IoError and with subsequent reconnections debounced 1500ms
@@ -35,9 +35,9 @@ async fn get_value(key: &str) -> RedisResult<String> {
 }
 ```
 
-## Runtime Configuration
+## Runtime Configuration (optional)
 
-By utilizing a barrier to guard thread local data destruction until runtime threads rendezvous during shutdown, it becomes possible to create thread-safe pointers to thread-local data owned by runtime worker threads. In order for [async-local](https://docs.rs/async-local) to protect thread local data within an async context, the provided barrier-protected Tokio Runtime must be used to ensure tasks never outlive thread local data owned by worker threads. By default, this crate makes no assumptions about the runtime used, and comes with the `leaky-context` feature flag enabled which prevents [Context<T>](https://docs.rs/async-local/latest/async_local/struct.Context.html) from ever deallocating by using [Box::leak](https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak); to avoid this extra indirection, disable `leaky-context` and configure the runtime using the [tokio::main](https://docs.rs/tokio/latest/tokio/attr.main.html) or [tokio::test](https://docs.rs/tokio/latest/tokio/attr.test.html) macro with the `crate` attribute set to `async_local` with only the `barrier-protected-runtime` feature flag set on [`async-local`](https://docs.rs/async-local).
+For best performance, use the Tokio runtime as configured via the [tokio::main](https://docs.rs/tokio/latest/tokio/attr.main.html) or [tokio::test](https://docs.rs/tokio/latest/tokio/attr.test.html) macro with the `crate` attribute set to `async_local` while the `barrier-protected-runtime` feature is enabled on [`async-local`](https://crates.io/crates/async-local). Doing so configures the Tokio runtime with a barrier that rendezvous runtime worker threads during shutdown in a way that ensures tasks never outlive thread local data owned by runtime worker threads and obviates the need for [Box::leak](https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak) as a means of lifetime extension.
 
 ## Stable Usage
 
