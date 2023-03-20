@@ -517,7 +517,7 @@ where
 pub async fn get<K: Into<Vec<u8>>>(key: K) -> Result<Option<Vec<u8>>, ErrorKind> {
   struct MGetQueue;
 
-  #[local_queue(buffer_size = 1024)]
+  #[local_queue(buffer_size = 2048)]
   impl TaskQueue for MGetQueue {
     type Task = Vec<u8>;
     type Value = Result<Option<Vec<u8>>, ErrorKind>;
