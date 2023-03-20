@@ -1,0 +1,38 @@
+version: "3"
+
+env:
+  TARGET: x86_64-apple-darwin
+
+tasks:
+  default:
+    cmds:
+      - task: test
+      - task: test-address-sanitizer
+
+  test:
+    cmds:
+      - cargo test -p redis-swapplex -- --nocapture
+
+  test-miri:
+    cmds:
+      - cargo miri test -Z build-std --target $TARGET -- --nocapture
+    env:
+      MIRIFLAGS: -Zmiri-backtrace=full -Zmiri-disable-isolation
+
+  bench:
+    env:
+      RUSTFLAGS: "-C target-cpu=native"
+    cmds:
+      - cargo bench --profile release -p redis-swapplex
+
+  doc:
+    cmds:
+      - cargo +nightly doc -p redis-swapplex --open
+    env:
+      RUSTDOCFLAGS: --cfg docsrs
+
+  test-address-sanitizer:
+    cmds:
+      - cargo test -Z build-std --target $TARGET -- --nocapture
+    ev:
+      RUSTFLAGS: -Z sanitizer=address
