@@ -1,5 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use fred::prelude::*;
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use redis::{aio::ConnectionManager, AsyncCommands};
 use redis_swapplex::{get, ConnectionManagerContext, EnvConnection};
 use tokio::runtime::Builder;
@@ -29,29 +30,49 @@ fn bench_redis(c: &mut Criterion) {
       .expect("Unable to establish Redis connection");
   });
 
-  c.benchmark_group("Multiplexed Redis GET");
+  let mut bench_multiplexed = c.benchmark_group("Multiplexed GET");
 
-  c.bench_function("redis::aio::ConnectionManager", |b| {
+  bench_multiplexed.bench_function("redis::aio::ConnectionManager", |b| {
     b.to_async(&rt).iter(|| async {
       let mut conn = conn_manager.clone();
       let _: () = conn.get("test").await.unwrap();
     })
   });
 
-  c.bench_function("redis_swapplex::EnvConnection", |b| {
+  bench_multiplexed.bench_function("redis_swapplex::EnvConnection", |b| {
     b.to_async(&rt).iter(|| async {
       let mut conn = EnvConnection::get_connection();
       let _: () = conn.get("test").await.unwrap();
     })
   });
 
-  c.bench_function("redis_swapplex::get", |b| {
+  bench_multiplexed.bench_function("redis_swapplex::get", |b| {
     b.to_async(&rt).iter(|| async {
       get("test").await.unwrap();
     });
   });
 
-  c.benchmark_group("Redis GET");
+  for n in 0..=6 {
+    let batch_size: u64 = 1 << n;
+
+    bench_multiplexed.bench_with_input(
+      BenchmarkId::new("redis_swapplex::get", batch_size),
+      &batch_size,
+      |b, batch_size| {
+        b.to_async(&rt).iter(|| async {
+          let tasks: FuturesUnordered<_> = (0..*batch_size)
+            .map(|i| get(format!("::{i}").as_bytes().to_vec()))
+            .collect();
+
+          tasks.collect::<Vec<_>>().await;
+        })
+      },
+    );
+  }
+
+  bench_multiplexed.finish();
+
+  let mut bench_regular = c.benchmark_group("GET");
 
   let client = rt.block_on(async {
     let config = RedisConfig::default();
@@ -68,11 +89,13 @@ fn bench_redis(c: &mut Criterion) {
     client
   });
 
-  c.bench_function("fred::clients::redis::RedisClient", |b| {
+  bench_regular.bench_function("fred::clients::redis::RedisClient", |b| {
     b.to_async(&rt).iter(|| async {
       let _: () = client.get("test").await.unwrap();
     });
   });
+
+  bench_regular.finish();
 }
 
 criterion_group!(benches, bench_redis);
