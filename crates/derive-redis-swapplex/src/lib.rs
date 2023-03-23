@@ -17,11 +17,11 @@ pub fn derive_manager_context(input: proc_macro::TokenStream) -> proc_macro::Tok
       }
 
       fn state_cache(
-      ) -> &'static std::thread::LocalKey<std::cell::RefCell<redis_swapplex::arc_swap::Cache<&'static redis_swapplex::arc_swap::ArcSwap<redis_swapplex::ConnectionState>, std::sync::Arc<redis_swapplex::ConnectionState>>>>
+      ) -> &'static std::thread::LocalKey<std::cell::RefCell<redis_swapplex::arc_swap::Cache<&'static redis_swapplex::arc_swap::ArcSwapOption<redis_swapplex::ConnectionState>, Option<std::sync::Arc<redis_swapplex::ConnectionState>>>>>
       {
         thread_local! {
           static STATE_CACHE:
-          std::cell::RefCell<redis_swapplex::arc_swap::Cache<&'static redis_swapplex::arc_swap::ArcSwap<redis_swapplex::ConnectionState>, std::sync::Arc<redis_swapplex::ConnectionState>>> = std::cell::RefCell::new(redis_swapplex::arc_swap::Cache::new(<#ident>::connection_manager().deref()));
+          std::cell::RefCell<redis_swapplex::arc_swap::Cache<&'static redis_swapplex::arc_swap::ArcSwapOption<redis_swapplex::ConnectionState>, Option<std::sync::Arc<redis_swapplex::ConnectionState>>>> = std::cell::RefCell::new(redis_swapplex::arc_swap::Cache::new(<#ident>::connection_manager().deref()));
         }
 
         &STATE_CACHE
