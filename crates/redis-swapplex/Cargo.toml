@@ -1,7 +1,7 @@
 [package]
 name = "redis-swapplex"
 authors = ["Thomas Sieverding <Thomas@bajix.com>"]
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 description = "Redis multiplexing with reconnection notifications and MGET auto-batching"
 readme = "../../README.md"
@@ -12,7 +12,7 @@ repository = "https://github.com/Bajix/redis-swapplex/"
 
 [dependencies]
 arc-swap = "1.6.0"
-derive-redis-swapplex = { version = "0.6.0", path = "../derive-redis-swapplex" }
+derive-redis-swapplex = { version = "0.8.0", path = "../derive-redis-swapplex" }
 env-url = "2.0.3"
 futures-util = "0.3"
 itoa = "1.0.6"
