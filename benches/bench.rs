@@ -60,9 +60,7 @@ fn bench_redis(c: &mut Criterion) {
       &batch_size,
       |b, batch_size| {
         b.to_async(&rt).iter(|| async {
-          let tasks: FuturesUnordered<_> = (0..*batch_size)
-            .map(|i| get(format!("::{i}").as_bytes().to_vec()))
-            .collect();
+          let tasks: FuturesUnordered<_> = (0..*batch_size).map(|i| get(i)).collect();
 
           tasks.collect::<Vec<_>>().await;
         })

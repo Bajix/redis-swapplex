@@ -31,6 +31,10 @@
 pub extern crate arc_swap;
 extern crate self as redis_swapplex;
 
+mod bytes;
+
+pub use bytes::IntoBytes;
+
 use arc_swap::{ArcSwap, ArcSwapAny, Cache};
 pub use derive_redis_swapplex::ConnectionManagerContext;
 use env_url::*;
@@ -515,7 +519,7 @@ where
 }
 
 /// Get the value of a key using auto-batched MGET commands
-pub async fn get<K: Into<Vec<u8>>>(key: K) -> Result<Option<Vec<u8>>, ErrorKind> {
+pub async fn get<K: IntoBytes>(key: K) -> Result<Option<Vec<u8>>, ErrorKind> {
   struct MGetQueue;
 
   #[local_queue(buffer_size = 2048)]
@@ -541,7 +545,7 @@ pub async fn get<K: Into<Vec<u8>>>(key: K) -> Result<Option<Vec<u8>>, ErrorKind>
     }
   }
 
-  MGetQueue::auto_batch(key.into()).await
+  MGetQueue::auto_batch(key.into_bytes()).await
 }
 
 /// Set the value of a key using auto-batched MSET commands. This runs in the background with Redis errors ignored.
@@ -550,7 +554,7 @@ pub async fn get<K: Into<Vec<u8>>>(key: K) -> Result<Option<Vec<u8>>, ErrorKind>
 ///
 /// Panics if called from **outside** of the Tokio runtime.
 ///
-pub fn set<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(key: K, value: V) {
+pub fn set<K: IntoBytes, V: IntoBytes>(key: K, value: V) {
   struct MSetQueue;
 
   #[local_queue(buffer_size = 2048)]
@@ -571,7 +575,7 @@ pub fn set<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(key: K, value: V) {
     }
   }
 
-  MSetQueue::auto_batch([key.into(), value.into()]);
+  MSetQueue::auto_batch([key.into_bytes(), value.into_bytes()]);
 }
 
 #[cfg(test)]
