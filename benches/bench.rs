@@ -52,7 +52,7 @@ fn bench_redis(c: &mut Criterion) {
     });
   });
 
-  for n in 0..=6 {
+  for n in 0..=9 {
     let batch_size: u64 = 1 << n;
 
     bench_multiplexed.bench_with_input(
