@@ -45,7 +45,7 @@ use redis::{
   Client, Cmd, ErrorKind, Pipeline, RedisError, RedisFuture, RedisResult, Value,
 };
 use stack_queue::{
-  assignment::{CompletionReceipt, PendingAssignment, UnboundedSlice},
+  assignment::{CompletionReceipt, PendingAssignment, UnboundedRange},
   local_queue, BackgroundQueue, TaskQueue,
 };
 use std::{
@@ -536,9 +536,11 @@ pub async fn get<K: IntoBytes>(key: K) -> Result<Option<Vec<u8>>, ErrorKind> {
     ) -> CompletionReceipt<Self> {
       let mut conn = get_connection();
       let assignment = batch.into_assignment();
+      let (front, back) = assignment.as_slices();
 
       let data: Result<Vec<Option<Vec<u8>>>, RedisError> = redis::cmd("MGET")
-        .arg(assignment.tasks())
+        .arg(front)
+        .arg(back)
         .query_async(&mut conn)
         .await;
 
@@ -565,7 +567,7 @@ pub fn set<K: IntoBytes, V: IntoBytes>(key: K, value: V) {
   impl BackgroundQueue for MSetQueue {
     type Task = [Vec<u8>; 2];
 
-    async fn batch_process<const N: usize>(batch: UnboundedSlice<'async_trait, [Vec<u8>; 2], N>) {
+    async fn batch_process<const N: usize>(batch: UnboundedRange<'async_trait, [Vec<u8>; 2], N>) {
       let mut conn = get_connection();
       let assignment = batch.into_bounded();
 
