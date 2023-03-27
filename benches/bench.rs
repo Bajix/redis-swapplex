@@ -6,7 +6,7 @@ use redis_swapplex::{get, ConnectionManagerContext, EnvConnection};
 use tokio::runtime::Builder;
 
 fn bench_redis(c: &mut Criterion) {
-  let rt = Builder::new_multi_thread()
+  let rt = Builder::new_current_thread()
     .enable_io()
     .build()
     .expect("Unable to create Tokio runtime");
@@ -52,7 +52,7 @@ fn bench_redis(c: &mut Criterion) {
     });
   });
 
-  for n in 0..=9 {
+  for n in 4..10 {
     let batch_size: u64 = 1 << n;
 
     bench_multiplexed.bench_with_input(
