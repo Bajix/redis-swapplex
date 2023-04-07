@@ -45,8 +45,8 @@ use redis::{
   Client, Cmd, ErrorKind, Pipeline, RedisError, RedisFuture, RedisResult, Value,
 };
 use stack_queue::{
-  assignment::{CompletionReceipt, PendingAssignment, UnboundedRange},
-  local_queue, BackgroundQueue, TaskQueue,
+  assignment::{CompletionReceipt, PendingAssignment},
+  local_queue, TaskQueue,
 };
 use std::{
   cell::RefCell,
@@ -554,34 +554,35 @@ pub async fn get<K: IntoBytes>(key: K) -> Result<Option<Vec<u8>>, ErrorKind> {
   MGetQueue::auto_batch(key.into_bytes()).await
 }
 
-/// Set the value of a key using auto-batched MSET commands. This runs in the background with Redis errors ignored.
-///
-/// # Panics
-///
-/// Panics if called from **outside** of the Tokio runtime.
-///
-pub fn set<K: IntoBytes, V: IntoBytes>(key: K, value: V) {
+/// Set the value of a key using auto-batched MSET commands
+pub async fn set<K: IntoBytes, V: IntoBytes>(key: K, value: V) -> Result<(), ErrorKind> {
   struct MSetQueue;
 
   #[local_queue(buffer_size = 2048)]
-  impl BackgroundQueue for MSetQueue {
+  impl TaskQueue for MSetQueue {
     type Task = [Vec<u8>; 2];
+    type Value = Result<(), ErrorKind>;
 
-    async fn batch_process<const N: usize>(batch: UnboundedRange<'async_trait, [Vec<u8>; 2], N>) {
+    async fn batch_process<const N: usize>(
+      batch: PendingAssignment<'async_trait, Self, N>,
+    ) -> CompletionReceipt<Self> {
       let mut conn = get_connection();
-      let assignment = batch.into_bounded();
+      let assignment = batch.into_assignment();
 
       let mut cmd = redis::cmd("MSET");
 
-      for kv in assignment.into_iter() {
-        cmd.arg(&kv);
+      for kv in assignment.tasks() {
+        cmd.arg(kv.deref());
       }
 
-      let _: Result<(), RedisError> = cmd.query_async(&mut conn).await;
+      match cmd.query_async(&mut conn).await {
+        Ok(()) => assignment.resolve_with_iter(iter::repeat(Ok(()))),
+        Err(err) => assignment.resolve_with_iter(iter::repeat(Result::Err(err.kind()))),
+      }
     }
   }
 
-  MSetQueue::auto_batch([key.into_bytes(), value.into_bytes()]);
+  MSetQueue::auto_batch([key.into_bytes(), value.into_bytes()]).await
 }
 
 #[cfg(test)]
