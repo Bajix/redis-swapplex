@@ -7,7 +7,7 @@ use tokio::runtime::Builder;
 
 fn bench_redis(c: &mut Criterion) {
   let rt = Builder::new_current_thread()
-    .enable_io()
+    .enable_all()
     .build()
     .expect("Unable to create Tokio runtime");
 
@@ -74,11 +74,10 @@ fn bench_redis(c: &mut Criterion) {
 
   let client = rt.block_on(async {
     let config = RedisConfig::default();
-    let policy = ReconnectPolicy::default();
-    let client = RedisClient::new(config);
+    let client = RedisClient::new(config, None, None);
 
     // connect to the server, returning a handle to the task that drives the connection
-    let _ = client.connect(Some(policy));
+    let _ = client.connect();
     let _ = client
       .wait_for_connect()
       .await
