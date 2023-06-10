@@ -25,7 +25,10 @@
 //! }
 //! ```
 
-#![cfg_attr(not(feature = "boxed"), feature(type_alias_impl_trait))]
+#![cfg_attr(
+  not(feature = "boxed"),
+  feature(type_alias_impl_trait, impl_trait_in_assoc_type)
+)]
 #![allow(rustdoc::private_intra_doc_links)]
 #[doc(hidden)]
 pub extern crate arc_swap;
