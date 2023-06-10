@@ -13,6 +13,7 @@ opt-level = 3
 codegen-units = 1
 
 [workspace]
+resolver = "2"
 members = [
   "crates/derive-redis-swapplex",
   "crates/redis-swapplex",
