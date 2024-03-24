@@ -32,7 +32,8 @@ extern crate self as redis_swapplex;
 
 mod bytes;
 
-pub use bytes::IntoBytes;
+pub use crate::bytes::IntoBytes;
+pub use ::bytes::Bytes;
 
 use arc_swap::{ArcSwapAny, ArcSwapOption, Cache};
 pub use derive_redis_swapplex::ConnectionManagerContext;
@@ -522,13 +523,13 @@ where
 }
 
 /// Get the value of a key using auto-batched MGET commands
-pub async fn get<K: IntoBytes>(key: K) -> Result<Option<Vec<u8>>, ErrorKind> {
+pub async fn get<K: IntoBytes>(key: K) -> Result<Option<Bytes>, ErrorKind> {
   struct MGetQueue;
 
   #[local_queue(buffer_size = 2048)]
   impl TaskQueue for MGetQueue {
     type Task = Vec<u8>;
-    type Value = Result<Option<Vec<u8>>, ErrorKind>;
+    type Value = Result<Option<Bytes>, ErrorKind>;
 
     async fn batch_process<const N: usize>(
       batch: PendingAssignment<'_, Self, N>,
@@ -537,7 +538,7 @@ pub async fn get<K: IntoBytes>(key: K) -> Result<Option<Vec<u8>>, ErrorKind> {
       let assignment = batch.into_assignment();
       let (front, back) = assignment.as_slices();
 
-      let data: Result<Vec<Option<Vec<u8>>>, RedisError> = redis::cmd("MGET")
+      let data: Result<Vec<Option<Bytes>>, RedisError> = redis::cmd("MGET")
         .arg(front)
         .arg(back)
         .query_async(&mut conn)
