@@ -15,7 +15,7 @@ tasks:
 
   test-miri:
     cmds:
-      - cargo miri test -Z build-std --target $TARGET -- --nocapture
+      - cargo +nightly miri test -Z build-std --target $TARGET -- --nocapture
     env:
       MIRIFLAGS: -Zmiri-backtrace=full -Zmiri-disable-isolation
 
@@ -33,6 +33,6 @@ tasks:
 
   test-address-sanitizer:
     cmds:
-      - cargo test -Z build-std --target $TARGET -- --nocapture
+      - cargo +nightly test -Z build-std --target $TARGET -- --nocapture
     env:
       RUSTFLAGS: -Z sanitizer=address
