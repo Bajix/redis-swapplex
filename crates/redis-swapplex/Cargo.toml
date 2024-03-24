@@ -7,6 +7,7 @@ description = "Redis multiplexing with reconnection notifications and MGET auto-
 readme = "../../README.md"
 license = "MIT"
 repository = "https://github.com/Bajix/redis-swapplex/"
+rust-version = "1.75"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,18 +17,18 @@ derive-redis-swapplex = { version = "0.9.0", path = "../derive-redis-swapplex" }
 env-url = "2"
 futures-util = "0.3"
 itoa = "1.0"
-once_cell = "1.17"
-redis = { version = "0.23", features = ["aio", "tokio-comp"] }
+once_cell = "1.18"
+redis = { version = "0.24", features = ["aio", "tokio-comp"] }
 ryu = "1.0"
-stack-queue = { version = "0.12", features = ["redis-args"] }
+stack-queue = { version = "0.13", features = ["redis-args"] }
 tokio = { version = "1", features = ["sync", "parking_lot"] }
 
 [dev-dependencies]
-async-local = { version = "1.2", features = ["barrier-protected-runtime"] }
-criterion = { version = "0.5.1", features = ["async_tokio", "html_reports"] }
-ctor = "0.2.0"
-fred = "6.3.0"
-redis = { version = "0.23", features = ["connection-manager"] }
+async-local = { version = "2", features = ["barrier-protected-runtime"] }
+criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
+ctor = "0.2"
+fred = "8"
+redis = { version = "0.24", features = ["connection-manager"] }
 tokio = { version = "1", features = [
   "rt",
   "macros",
@@ -37,9 +38,6 @@ tokio = { version = "1", features = [
 
 [features]
 default = []
-
-# Downgrade async_t to async_trait::async_trait
-boxed = ["stack-queue/boxed"]
 
 [[bench]]
 name = "benchmarks"

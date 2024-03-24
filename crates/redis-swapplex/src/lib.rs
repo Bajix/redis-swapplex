@@ -25,10 +25,6 @@
 //! }
 //! ```
 
-#![cfg_attr(
-  not(feature = "boxed"),
-  feature(type_alias_impl_trait, impl_trait_in_assoc_type)
-)]
 #![allow(rustdoc::private_intra_doc_links)]
 #[doc(hidden)]
 pub extern crate arc_swap;
@@ -535,7 +531,7 @@ pub async fn get<K: IntoBytes>(key: K) -> Result<Option<Vec<u8>>, ErrorKind> {
     type Value = Result<Option<Vec<u8>>, ErrorKind>;
 
     async fn batch_process<const N: usize>(
-      batch: PendingAssignment<'async_trait, Self, N>,
+      batch: PendingAssignment<'_, Self, N>,
     ) -> CompletionReceipt<Self> {
       let mut conn = get_connection();
       let assignment = batch.into_assignment();
@@ -567,7 +563,7 @@ pub async fn set<K: IntoBytes, V: IntoBytes>(key: K, value: V) -> Result<(), Err
     type Value = Result<(), ErrorKind>;
 
     async fn batch_process<const N: usize>(
-      batch: PendingAssignment<'async_trait, Self, N>,
+      batch: PendingAssignment<'_, Self, N>,
     ) -> CompletionReceipt<Self> {
       let mut conn = get_connection();
       let assignment = batch.into_assignment();

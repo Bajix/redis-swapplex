@@ -74,7 +74,7 @@ fn bench_redis(c: &mut Criterion) {
 
   let client = rt.block_on(async {
     let config = RedisConfig::default();
-    let client = RedisClient::new(config, None, None);
+    let client = RedisClient::new(config, None, None, None);
 
     // connect to the server, returning a handle to the task that drives the connection
     let _ = client.connect();
