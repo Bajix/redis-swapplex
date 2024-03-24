@@ -10,7 +10,7 @@ Why use this instead of [redis::aio::ConnectionManager](https://docs.rs/redis/la
 - Error-free reconnection behavior: when a command would otherwise fail as a consequence of the connection being dropped, this library will immediately reconnect and retry when able without producing an otherwise avoidable IoError and with subsequent reconnections debounced 1500ms
 - ENV configuration simplifies kubernetes usage
 - Reconnects can be observed allowing for Redis [server-assisted client-side caching](https://redis.io/docs/manual/client-side-caching/) using client tracking redirection
-- Integrated MGET auto-batching (up to 180x more performant than GET)
+- Integrated MGET auto-batching
 
 ## ENV Configuration
 

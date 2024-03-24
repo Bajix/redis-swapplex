@@ -23,9 +23,14 @@ fn bench_redis(c: &mut Criterion) {
   });
 
   rt.block_on(async {
+    let mset = (0..512)
+      .into_iter()
+      .map(|i| (i.to_string(), i.to_string()))
+      .chain(std::iter::once(("test".to_string(), "test".to_string())))
+      .collect::<Vec<_>>();
     // connection established on first use
     let _: () = EnvConnection::get_connection()
-      .set("test", "test")
+      .mset(mset.as_slice())
       .await
       .expect("Unable to establish Redis connection");
   });
@@ -54,6 +59,24 @@ fn bench_redis(c: &mut Criterion) {
 
   for n in 4..10 {
     let batch_size: u64 = 1 << n;
+
+    bench_multiplexed.bench_with_input(
+      BenchmarkId::new("redis::aio::ConnectionManager", batch_size),
+      &batch_size,
+      |b, batch_size| {
+        b.to_async(&rt).iter(|| async {
+          let tasks: FuturesUnordered<_> = (0..*batch_size)
+            .map(|i| {
+              let mut conn = conn_manager.clone();
+
+              async move { conn.get::<'_, _, Vec<u8>>(i).await }
+            })
+            .collect();
+
+          tasks.collect::<Vec<_>>().await;
+        })
+      },
+    );
 
     bench_multiplexed.bench_with_input(
       BenchmarkId::new("redis_swapplex::get", batch_size),
