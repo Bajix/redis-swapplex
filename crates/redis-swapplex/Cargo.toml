@@ -14,7 +14,7 @@ rust-version = "1.75"
 [dependencies]
 arc-swap = "1.7"
 derive-redis-swapplex = { version = "0.12.0", path = "../derive-redis-swapplex" }
-env-url = "2"
+env-url = "2.1"
 futures-util = "0.3"
 itoa = "1.0"
 once_cell = "1.19"
@@ -27,7 +27,7 @@ tokio = { version = "1", features = ["sync", "parking_lot"] }
 async-local = { version = "2", features = ["barrier-protected-runtime"] }
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 ctor = "0.2"
-fred = "8"
+fred = "9.0"
 redis = { version = "0.25", features = ["connection-manager"] }
 tokio = { version = "1", features = [
   "rt",
