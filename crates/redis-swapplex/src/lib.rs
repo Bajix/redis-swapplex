@@ -30,9 +30,7 @@
 pub extern crate arc_swap;
 extern crate self as redis_swapplex;
 
-mod bytes;
-
-pub use bytes::IntoBytes;
+pub use into_bytes::IntoBytes;
 
 use arc_swap::{ArcSwapAny, ArcSwapOption, Cache};
 pub use derive_redis_swapplex::ConnectionManagerContext;
