@@ -2,7 +2,7 @@
 name = "derive-redis-swapplex"
 authors = ["Thomas Sieverding <Thomas@bajix.com>"]
 edition = "2021"
-version = "0.12.1"
+version = "0.13.0"
 description = "Derives for redis-swapplex"
 readme = "../../README.md"
 license = "MIT"
